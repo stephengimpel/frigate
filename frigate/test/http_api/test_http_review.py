@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Request
 from peewee import DoesNotExist
@@ -362,7 +362,7 @@ class TestHttpReview(BaseTestHttp):
             assert response_json["last24Hours"]["total_alert"] == 1
             assert response_json["last24Hours"]["total_detection"] == 0
 
-            today_formatted = datetime.today().strftime("%Y-%m-%d")
+            today_formatted = datetime.now(UTC).strftime("%Y-%m-%d")
             assert response_json[today_formatted]["total_alert"] == 1
             assert response_json[today_formatted]["total_detection"] == 0
 
@@ -379,7 +379,7 @@ class TestHttpReview(BaseTestHttp):
             assert response.status_code == 200
             response_json = response.json()
             # e.g. '2024-11-24'
-            today_formatted = datetime.today().strftime("%Y-%m-%d")
+            today_formatted = datetime.now(UTC).strftime("%Y-%m-%d")
             expected_response = {
                 "last24Hours": {
                     "reviewed_alert": 0,
@@ -404,7 +404,7 @@ class TestHttpReview(BaseTestHttp):
             assert response.status_code == 200
             response_json = response.json()
             # e.g. '2024-11-24'
-            today_formatted = datetime.today().strftime("%Y-%m-%d")
+            today_formatted = datetime.now(UTC).strftime("%Y-%m-%d")
             expected_response = {
                 "last24Hours": {
                     "reviewed_alert": 0,
@@ -423,8 +423,8 @@ class TestHttpReview(BaseTestHttp):
             self.assertEqual(response_json, expected_response)
 
     def test_get_review_summary_multiple_days(self):
-        now = datetime.now()
-        five_days_ago = datetime.today() - timedelta(days=5)
+        now = datetime.now(UTC)
+        five_days_ago = now - timedelta(days=5)
 
         with AuthTestClient(self.app) as client:
             super().insert_mock_review_segment(
@@ -467,8 +467,8 @@ class TestHttpReview(BaseTestHttp):
             self.assertEqual(response_json, expected_response)
 
     def test_get_review_summary_multiple_in_same_day(self):
-        now = datetime.now()
-        five_days_ago = datetime.today() - timedelta(days=5)
+        now = datetime.now(UTC)
+        five_days_ago = now - timedelta(days=5)
 
         with AuthTestClient(self.app) as client:
             super().insert_mock_review_segment("123456.random", now.timestamp())
@@ -519,7 +519,7 @@ class TestHttpReview(BaseTestHttp):
             self.assertEqual(response_json, expected_response)
 
     def test_get_review_summary_multiple_in_same_day_with_reviewed(self):
-        five_days_ago = datetime.today() - timedelta(days=5)
+        five_days_ago = datetime.now(UTC) - timedelta(days=5)
 
         with AuthTestClient(self.app) as client:
             five_days_ago_ts = five_days_ago.timestamp()
