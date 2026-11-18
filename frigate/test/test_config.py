@@ -1582,11 +1582,6 @@ class TestConfig(unittest.TestCase):
         assert frigate_config.primary_model.merged_labelmap[0] == "person"
 
     def test_plus_labelmap(self):
-        with open(os.path.join(MODEL_CACHE_DIR, "test"), "w") as f:
-            json.dump(self.plus_model_info, f)
-        with open(os.path.join(MODEL_CACHE_DIR, "test.json"), "w") as f:
-            json.dump(self.plus_model_info, f)
-
         config = {
             "mqtt": {"host": "mqtt"},
             "models": [{"path": "plus://test", "devices": ["cpu"]}],
@@ -1609,7 +1604,18 @@ class TestConfig(unittest.TestCase):
             },
         }
 
-        frigate_config = FrigateConfig(**config)
+        with (
+            tempfile.TemporaryDirectory() as model_cache,
+            patch("frigate.detectors.detector_config.MODEL_CACHE_DIR", model_cache),
+            patch("frigate.plus.MODEL_CACHE_DIR", model_cache),
+        ):
+            with open(os.path.join(model_cache, "test"), "w") as f:
+                json.dump(self.plus_model_info, f)
+            with open(os.path.join(model_cache, "test.json"), "w") as f:
+                json.dump(self.plus_model_info, f)
+
+            frigate_config = FrigateConfig(**config)
+
         assert frigate_config.primary_model.merged_labelmap[0] == "amazon"
 
     @patch(
