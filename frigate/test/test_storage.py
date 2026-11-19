@@ -1,4 +1,5 @@
 import datetime
+import gc
 import logging
 import os
 import tempfile
@@ -515,51 +516,67 @@ class TestHttp(unittest.TestCase):
         config = FrigateConfig(**self.minimal_config)
         storage = StorageMaintainer(config, MagicMock())
 
-        id = "123456.keep"
-        time_keep = datetime.datetime.now().timestamp()
+        segment_length = 600
+        time_start = datetime.datetime.now().timestamp() - 7200
+
         _insert_mock_event(
-            id,
-            time_keep,
-            time_keep + 30,
+            "123456.keep",
+            time_start,
+            time_start + 3 * segment_length,
             True,
         )
-        rec_k_id = "1234567.keep"
-        rec_k2_id = "1234568.keep"
-        rec_k3_id = "1234569.keep"
-        _insert_mock_recording(
-            rec_k_id,
-            os.path.join(self.test_dir, f"{rec_k_id}.tmp"),
-            time_keep,
-            time_keep + 10,
-        )
-        _insert_mock_recording(
-            rec_k2_id,
-            os.path.join(self.test_dir, f"{rec_k2_id}.tmp"),
-            time_keep + 10,
-            time_keep + 20,
-        )
-        _insert_mock_recording(
-            rec_k3_id,
-            os.path.join(self.test_dir, f"{rec_k3_id}.tmp"),
-            time_keep + 20,
-            time_keep + 30,
-        )
-
-        time_delete = datetime.datetime.now().timestamp() - 7200
-        for i in range(0, 59):
-            id = f"{123456 + i}.delete"
+        retained = []
+        for i in range(3):
+            rec_id = f"{1234567 + i}.keep"
+            path = os.path.join(self.test_dir, f"{rec_id}.tmp")
             _insert_mock_recording(
-                id,
-                os.path.join(self.test_dir, f"{id}.tmp"),
-                time_delete,
-                time_delete + 600,
+                rec_id,
+                path,
+                time_start + i * segment_length,
+                time_start + (i + 1) * segment_length,
             )
+            retained.append((rec_id, path))
+
+        time_expire = time_start + 4 * segment_length
+        _insert_mock_event(
+            "7890.delete",
+            time_expire,
+            time_expire + 7 * segment_length,
+            False,
+        )
+        expired = []
+        for i in range(7):
+            rec_id = f"{78901 + i}.delete"
+            path = os.path.join(self.test_dir, f"{rec_id}.tmp")
+            _insert_mock_recording(
+                rec_id,
+                path,
+                time_expire + i * segment_length,
+                time_expire + (i + 1) * segment_length,
+            )
+            expired.append((rec_id, path))
 
         storage.calculate_camera_bandwidth()
         storage.reduce_storage_consumption()
-        assert Recordings.get(Recordings.id == rec_k_id)
-        assert Recordings.get(Recordings.id == rec_k2_id)
-        assert Recordings.get(Recordings.id == rec_k3_id)
+
+        # Cleans up database, keeps clean for subsequent runs in early failure cases
+        gc.collect()
+
+        for rec_id, path in retained:
+            self.assertTrue(
+                Recordings.select().where(Recordings.id == rec_id).exists(),
+                f"retained recording {rec_id} was deleted",
+            )
+            self.assertTrue(os.path.exists(path), f"retained file {path} was removed")
+
+        for rec_id, path in expired:
+            self.assertFalse(
+                Recordings.select().where(Recordings.id == rec_id).exists(),
+                f"expired recording {rec_id} was not deleted",
+            )
+            self.assertFalse(os.path.exists(path), f"expired file {path} was kept")
+
+        self.assertFalse(storage.retention_unmet)
 
     def test_unmet_retention_sets_the_live_flag(self):
         config = FrigateConfig(**self.minimal_config)
