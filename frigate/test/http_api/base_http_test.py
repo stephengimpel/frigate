@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import unittest
+import zoneinfo
 from unittest.mock import patch
 
 from fastapi import Request
@@ -58,6 +59,11 @@ class BaseTestHttp(unittest.TestCase):
         )
         publisher_patch.start()
         self.addCleanup(publisher_patch.stop)
+
+        zoneinfo.reset_tzpath(to=[])
+        zoneinfo.ZoneInfo.clear_cache()
+        self.addCleanup(zoneinfo.ZoneInfo.clear_cache)
+        self.addCleanup(zoneinfo.reset_tzpath)
 
         self.minimal_config = {
             "mqtt": {"host": "mqtt"},
